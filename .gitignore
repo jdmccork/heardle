@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+/HeardleWeb/.vs
+/HeardleWeb/Heardle/bin/Debug/net7.0
+/HeardleWeb/Heardle/obj/Debug/net7.0
+/HeardleWeb/Heardle/obj/Release/net7.0
