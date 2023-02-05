@@ -14,85 +14,90 @@ using static SpotifyAPI.Web.Scopes;
 
 namespace Heardle
 {
-  public class Startup
-  {
-    public Startup(IConfiguration configuration)
-    {
-      Configuration = configuration;
-    }
+	public class Startup
+	{
+		public Startup(IConfiguration configuration)
+		{
+			Configuration = configuration;
+		}
 
-    public IConfiguration Configuration { get; }
+		public IConfiguration Configuration { get; }
 
-    // This method gets called by the runtime. Use this method to add services to the container.
-    public void ConfigureServices(IServiceCollection services)
-    {
-      services.AddHttpContextAccessor();
-      services.AddSingleton(SpotifyClientConfig.CreateDefault());
-      services.AddScoped<SpotifyClientBuilder>();
+		// This method gets called by the runtime. Use this method to add services to the container.
+		public void ConfigureServices(IServiceCollection services)
+		{
+			services.AddHttpContextAccessor();
+			services.AddSingleton(SpotifyClientConfig.CreateDefault());
+			services.AddScoped<SpotifyClientBuilder>();
 
-      services.AddAuthorization(options =>
-      {
-        options.AddPolicy("Spotify", policy =>
-        {
-          policy.AuthenticationSchemes.Add("Spotify");
-          policy.RequireAuthenticatedUser();
-        });
-      });
-      services
-        .AddAuthentication(options =>
-        {
-          options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-        })
-        .AddCookie(options =>
-        {
-          options.ExpireTimeSpan = TimeSpan.FromMinutes(50);
-        })
-        .AddSpotify(options =>
-        {
-          options.ClientId = Configuration["SPOTIFY_CLIENT_ID"];
-          options.ClientSecret = Configuration["SPOTIFY_CLIENT_SECRET"];
-            options.CallbackPath = "/Auth/callback";
-            options.SaveTokens = true;
+			services.AddSession();
+			services.AddMemoryCache();
 
-          var scopes = new List<string> {
-            UserReadEmail, UserReadPrivate, PlaylistReadPrivate, PlaylistReadCollaborative
-          };
-          options.Scope.Add(string.Join(",", scopes));
-        })
-        ;
-      services.AddRazorPages()
-        .AddRazorPagesOptions(options =>
-        {
-          options.Conventions.AuthorizeFolder("/", "Spotify");
-        });
-    }
 
-    // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
-    {
-      if (env.IsDevelopment())
-      {
-        app.UseDeveloperExceptionPage();
-      }
-      else
-      {
-        app.UseExceptionHandler("/Error");
-        // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-        // app.UseHsts();
-      }
+			services.AddAuthorization(options =>
+			{
+				options.AddPolicy("Spotify", policy =>
+		  {
+			  policy.AuthenticationSchemes.Add("Spotify");
+			  policy.RequireAuthenticatedUser();
+		  });
+			});
+			services
+			  .AddAuthentication(options =>
+			  {
+				  options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+			  })
+			  .AddCookie(options =>
+			  {
+				  options.ExpireTimeSpan = TimeSpan.FromMinutes(50);
+			  })
+			  .AddSpotify(options =>
+			  {
+				  options.ClientId = Configuration["SPOTIFY_CLIENT_ID"];
+				  options.ClientSecret = Configuration["SPOTIFY_CLIENT_SECRET"];
+				  options.CallbackPath = "/Auth/callback";
+				  options.SaveTokens = true;
 
-      app.UseHttpsRedirection();
-      app.UseStaticFiles();
+				  var scopes = new List<string> {
+			UserReadEmail, UserReadPrivate, PlaylistReadPrivate, PlaylistReadCollaborative, UserLibraryRead, UserTopRead
+				};
+				  options.Scope.Add(string.Join(",", scopes));
+			  })
+			  ;
+			services.AddRazorPages()
+			  .AddRazorPagesOptions(options =>
+			  {
+				  options.Conventions.AuthorizeFolder("/", "Spotify");
+			  });
+		}
 
-      app.UseRouting();
+		// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
+		public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+		{
+			if (env.IsDevelopment())
+			{
+				app.UseDeveloperExceptionPage();
+			}
+			else
+			{
+				app.UseExceptionHandler("/Error");
+				// The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+				// app.UseHsts();
+			}
 
-      app.UseAuthentication();
-      app.UseAuthorization();
+			app.UseHttpsRedirection();
+			app.UseStaticFiles();
 
-      app.UseEndpoints(endpoints =>
-      {
-        endpoints.MapRazorPages();
-      });
-        }
-    }
+			app.UseRouting();
+			app.UseSession();
+
+			app.UseAuthentication();
+			app.UseAuthorization();
+
+			app.UseEndpoints(endpoints =>
+			{
+				endpoints.MapRazorPages();
+			});
+		}
+	}
 }

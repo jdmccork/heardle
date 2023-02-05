@@ -396,3 +396,4 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+/HeardleWeb/Heardle/Properties/launchSettings.json

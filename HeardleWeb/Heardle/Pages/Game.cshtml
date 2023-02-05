@@ -1,0 +1,17 @@
+﻿@page
+@model GameModel
+@{
+	ViewData["Title"] = "Heardle";
+	ViewData["Page"] = "game";
+}
+
+@if (Model.CurrentSong.Album.Images.Any())
+{
+	<img width="100" height="100" src="@Model.CurrentSong.Album.Images[0].Url">
+}
+<p>@Model.Message</p>
+
+<form method="post" asp-page-handler="Guess">
+	<input type="text" name="Guess" />
+	<input type="submit" value="Guess" />
+</form>
