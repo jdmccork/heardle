@@ -1,15 +1,12 @@
 using System;
 using System.Collections.Generic;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SpotifyAPI.Web;
-using static System.Net.WebRequestMethods;
 using static SpotifyAPI.Web.Scopes;
 
 namespace Heardle
@@ -59,7 +56,7 @@ namespace Heardle
 				  options.SaveTokens = true;
 
 				  var scopes = new List<string> {
-			UserReadEmail, UserReadPrivate, PlaylistReadPrivate, PlaylistReadCollaborative, UserLibraryRead, UserTopRead
+			UserReadEmail, UserReadPrivate, PlaylistReadPrivate, PlaylistReadCollaborative, UserLibraryRead, UserTopRead, Streaming, UserModifyPlaybackState
 				};
 				  options.Scope.Add(string.Join(",", scopes));
 			  })

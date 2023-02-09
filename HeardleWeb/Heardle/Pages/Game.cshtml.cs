@@ -1,17 +1,13 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using SpotifyAPI.Web;
-using static SpotifyAPI.Web.PlayerResumePlaybackRequest;
 
 namespace Heardle.Pages
 {
@@ -25,12 +21,13 @@ namespace Heardle.Pages
 		public FullTrack CurrentSong { get; set; }
 		[BindProperty]
 		public string Message { get; set; }
-		public Paging<SavedTrack> LikedSongsInfo { get; set; }
-
+		public Paging<SavedTrack> PlaylistSongInfo { get; set; }
+		public string Token { get; set; }
 
 		public GameModel(SpotifyClientBuilder spotifyClientBuilder)
 		{
 			_spotifyClientBuilder = spotifyClientBuilder;
+			Token = spotifyClientBuilder.GetToken();
 		}
 
 		public PrivateUser Me { get; set; }
@@ -38,12 +35,17 @@ namespace Heardle.Pages
 		public async Task OnGet()
 		{
 			var spotify = await _spotifyClientBuilder.BuildClient();
+			if (HttpContext.Session.GetString("PlaylistSongInfo") != null)
+			{
+				CurrentSong = JsonConvert.DeserializeObject<FullTrack>(HttpContext.Session.GetString("CurrentSong"));
+				return;
+			}
 
-			LikedSongsInfo = await spotify.Library.GetTracks(new LibraryTracksRequest { Limit = 1, Offset = 0 });
-			HttpContext.Session.SetString("LikedSongsInfo", JsonConvert.SerializeObject(LikedSongsInfo));
-			Console.WriteLine(LikedSongsInfo + " containing " + LikedSongsInfo.Total + " tracks");
+			PlaylistSongInfo = await spotify.Library.GetTracks(new LibraryTracksRequest { Limit = 1, Offset = 0 });
+			HttpContext.Session.SetString("PlaylistSongInfo", JsonConvert.SerializeObject(PlaylistSongInfo));
+			Console.WriteLine(PlaylistSongInfo + " containing " + PlaylistSongInfo.Total + " tracks");
 
-			if (LikedSongsInfo == null || LikedSongsInfo.Total == 0)
+			if (PlaylistSongInfo == null || PlaylistSongInfo.Total == 0)
 			{
 				Message = "Unable to find any liked songs for the current user";
 				return;
@@ -56,9 +58,9 @@ namespace Heardle.Pages
 		private async Task GetNextSong()
 		{
 			var spotify = await _spotifyClientBuilder.BuildClient();
-			LikedSongsInfo = JsonConvert.DeserializeObject<Paging<SavedTrack>>(HttpContext.Session.GetString("LikedSongsInfo"));
+			PlaylistSongInfo = JsonConvert.DeserializeObject<Paging<SavedTrack>>(HttpContext.Session.GetString("PlaylistSongInfo"));
 
-			var songIndex = new Random().Next((int)LikedSongsInfo.Total);
+			var songIndex = new Random().Next((int)PlaylistSongInfo.Total);
 			var likedSongs = await spotify.Library.GetTracks(new LibraryTracksRequest { Limit = 1, Offset = songIndex });
 
 			CurrentSong = likedSongs.Items[0].Track;
@@ -74,10 +76,16 @@ namespace Heardle.Pages
 			var guess = new SearchRequest(SearchRequest.Types.Track, Guess);
 			var guessedSong = (await spotify.Search.Item(guess)).Tracks.Items.FirstOrDefault();
 
-			Console.WriteLine("Correct Song: " + CurrentSong.Href + ", " + CurrentSong.Name);
-			Console.WriteLine("Song Guessed: " + guessedSong.Href + ", " + guessedSong.Name);
+			Console.WriteLine("Correct Song: " + CurrentSong.Href + ", " + CurrentSong.Name + " by: " + String.Join(" & ", CurrentSong.Artists.Select(x => x.Name)));
+			Console.WriteLine("Song Guessed: " + guessedSong.Href + ", " + guessedSong.Name + " by: " + String.Join(" & ", guessedSong.Artists.Select(x => x.Name)));
 
-			if (guessedSong.Id == CurrentSong.Id)
+			Console.WriteLine(guessedSong.Name == CurrentSong.Name);
+			Console.WriteLine(guessedSong.Artists.Select(x => x.Name).Except(CurrentSong.Artists.Select(x => x.Name)).ToList().Count);
+
+			if (guessedSong.Id == CurrentSong.Id 
+				|| (
+					guessedSong.Name == CurrentSong.Name 
+					&& guessedSong.Artists.Select(x => x.Name).Except(CurrentSong.Artists.Select(x => x.Name)).ToList().Count == 0))
 			{
 				Message = "Correct Guess";
 				Console.WriteLine("Correct guess");
@@ -88,6 +96,35 @@ namespace Heardle.Pages
 				Message = "Incorrect Guess";
 				Console.WriteLine("Incorrect Guess");
 			}
+		}
+
+		public IActionResult OnPostAutoComplete(string search)
+		{
+			Console.WriteLine(search);
+			var spotify = _spotifyClientBuilder.BuildClient().Result;
+
+			var guess = new SearchRequest(SearchRequest.Types.Track, search) { Limit = 50 };
+			var searchResult = spotify.Search.Item(guess).Result.Tracks.Items;
+
+			var test = new LibraryCheckTracksRequest(searchResult.Select(x => x.Id).ToList());
+			var tracksInPlaylist = spotify.Library.CheckTracks(test).Result;
+
+			var candidateSongs = searchResult.Where((track, index) => tracksInPlaylist[index] || (track.Name == CurrentSong.Name && track.Artists.Select(x => x.Name).Except(CurrentSong.Artists.Select(x => x.Name)).ToList().Count == 0));
+
+			return new JsonResult(candidateSongs);
+		}
+
+		public async Task<IActionResult> OnPostConnectSDK(string deviceId)
+		{
+			var spotify = await _spotifyClientBuilder.BuildClient();
+			CurrentSong = JsonConvert.DeserializeObject<FullTrack>(HttpContext.Session.GetString("CurrentSong"));
+
+			var response = await spotify.Player.TransferPlayback(new PlayerTransferPlaybackRequest(new List<string>() { deviceId }));
+			var request = new PlayerResumePlaybackRequest() { Uris = new List<string>() { CurrentSong.Uri }, DeviceId = deviceId, PositionMs = 0 };
+
+			var playback = await spotify.Player.ResumePlayback(request);
+
+			return new JsonResult(response);
 		}
 
 		public async Task<IActionResult> OnPost()

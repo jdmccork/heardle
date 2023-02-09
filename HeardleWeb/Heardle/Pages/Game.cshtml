@@ -7,11 +7,136 @@
 
 @if (Model.CurrentSong.Album.Images.Any())
 {
-	<img width="100" height="100" src="@Model.CurrentSong.Album.Images[0].Url">
-}
+	<img width="300" height="300" src="@Model.CurrentSong.Album.Images[0].Url">
+	<script src="https://sdk.scdn.co/spotify-player.js"></script>
+}	
+<button id="togglePlay">Toggle Play</button>
 <p>@Model.Message</p>
 
 <form method="post" asp-page-handler="Guess">
-	<input type="text" name="Guess" />
-	<input type="submit" value="Guess" />
+	<div>
+		<input id="autoCompleteField" type="text" name="Guess" />
+		<input type="submit" value="Guess" />
+	</div>
+	<div id="autoComplete" class="autoComplete"></div>
 </form>
+
+<script type="text/javascript">
+	let player
+	window.onSpotifyWebPlaybackSDKReady = () => {
+		const token = '@Model.Token';
+		player = new Spotify.Player({
+			name: 'Heardle Web Playback SDK',
+			getOAuthToken: cb => { cb(token); },
+			volume: 0.3
+		});
+
+		player.addListener('ready', ({ device_id }) => {
+			console.log('Ready with Device ID', device_id);
+
+			$.ajax({
+			url: '/Game?handler=ConnectSDK',
+			data: { "deviceId": device_id },
+			type: "POST",
+			headers: { "RequestVerificationToken": $('input[name="__RequestVerificationToken"]').val() },
+			success: function (data) {
+				console.log(data);
+				showResults(data)
+			},
+			error: function (response) {
+				console.log(response);
+			}
+		});
+		});
+
+		// Not Ready
+		player.addListener('not_ready', ({ device_id }) => {
+			console.log('Device ID has gone offline', device_id);
+		});
+
+		player.addListener('initialization_error', ({ message }) => {
+			console.error(message);
+		});
+
+		player.addListener('authentication_error', ({ message }) => {
+			console.error(message);
+		});
+
+		player.addListener('account_error', ({ message }) => {
+			console.error(message);
+		});
+
+		document.getElementById('togglePlay').onclick = function () {
+			player.togglePlay();
+		};
+
+		player.connect();
+	}
+
+
+	//setup before functions
+	var typingTimer;                //timer identifier
+	var doneTypingInterval = 750;  //time in ms
+
+	//on keyup, start the countdown
+	$('#autoCompleteField').keyup(function () {
+		clearTimeout(typingTimer);
+		if ($('#autoCompleteField').val()) {
+			typingTimer = setTimeout(autoCompleteSearch, doneTypingInterval);
+		}
+	});
+
+	function autoCompleteSearch(manual = false) {
+		let autoCompletetxt = $(autoCompleteField)[0].value
+		if (!manual && autoCompletetxt.length < 3) {
+			return
+		}
+		$.ajax({
+			url: '/Game?handler=AutoComplete',
+			data: { "search": autoCompletetxt },
+			type: "POST",
+			headers: { "RequestVerificationToken": $('input[name="__RequestVerificationToken"]').val() },
+			success: function (data) {
+				console.log(data);
+				showResults(data)
+			},
+			error: function (response) {
+				console.log(response);
+			}
+		});
+	}
+
+	function showResults(data) {
+		res = document.getElementById("autoComplete");
+		let table = document.createElement("table");
+
+		for (i = 0; i < data.length; i++) {
+			var row = document.createElement("tr");
+
+			// add image
+			var image = document.createElement("img");
+			image.src = data[i].album.images[data[i].album.images.length - 1].url
+			row.appendChild(image);
+
+			// Add title
+			var trackName = document.createElement("td");
+			trackName.innerText = data[i].name
+			row.appendChild(trackName);
+
+			// Add artists
+			var artists = document.createElement("td");
+			artists.innerText = data[i].artists.map(artist => artist.name).join(' & ')
+			row.appendChild(artists);
+
+			table.appendChild(row);
+
+			//table += `<tr><td>\
+			//		<img src= + data[i].album.images[data[i].album.images.length - 1].url>
+			//		data[i].name + data[i].artists.map(artist => artist.name).join(' & ') 
+			//	</td></tr>`;
+		}
+		res.replaceChildren(table);
+		return true;
+
+	}
+</script>
