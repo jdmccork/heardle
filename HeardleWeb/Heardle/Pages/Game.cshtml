@@ -65,8 +65,9 @@
 	}
 
 	function loadGame() {
-		$('#song-element').load('/Game?handler=NextSong')
-		document.getElementById("guessMessage").textContent = ""
+		$('#song-element').load('/Game?handler=NextSong', function() {
+			document.getElementById("guessMessage").textContent = ""
+		})
 		return true;
 	}
 </script>

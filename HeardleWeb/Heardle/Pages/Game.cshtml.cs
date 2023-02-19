@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
@@ -31,7 +30,7 @@ namespace Heardle.Pages
 
 		public PrivateUser Me { get; set; }
 
-		public async Task OnGet()
+		public void OnGet()
 		{
 			
 		}
@@ -39,9 +38,9 @@ namespace Heardle.Pages
 		private async Task GetUserSongs()
 		{
 			var spotify = await _spotifyClientBuilder.BuildClient();
-			var x = HttpContext.Session.GetString("PlaylistSongInfo");
+			var likedSongsCache = HttpContext.Session.GetString("PlaylistSongInfo");
 
-			if (x == null)
+			if (likedSongsCache == null)
 			{
 				PlaylistSongInfo = await spotify.Library.GetTracks(new LibraryTracksRequest { Limit = 50, Offset = 0 });
 				for (int i = 50; i < PlaylistSongInfo.Total; i += 50)
@@ -52,7 +51,7 @@ namespace Heardle.Pages
 			}
 			else
 			{
-				PlaylistSongInfo = JsonConvert.DeserializeObject<Paging<SavedTrack>>(x);
+				PlaylistSongInfo = JsonConvert.DeserializeObject<Paging<SavedTrack>>(likedSongsCache);
 			}
 
 			Console.WriteLine(PlaylistSongInfo + " containing " + PlaylistSongInfo.Total + " tracks");
@@ -94,27 +93,17 @@ namespace Heardle.Pages
 			return new JsonResult("Playing track " + CurrentSong.Name);
 		}
 
-		public async Task<IActionResult> OnPostGuess(string guess)
+		public IActionResult OnPostGuess(string songIdGuess)
 		{
-			var spotify = await _spotifyClientBuilder.BuildClient();
+			PlaylistSongInfo = JsonConvert.DeserializeObject<Paging<SavedTrack>>(HttpContext.Session.GetString("PlaylistSongInfo"));
 			CurrentSong = JsonConvert.DeserializeObject<FullTrack>(HttpContext.Session.GetString("CurrentSong"));
 
-			var guessResponse = new SearchRequest(SearchRequest.Types.Track, guess);
-			var guessedSong = (await spotify.Search.Item(guessResponse)).Tracks.Items.FirstOrDefault();
+			var guessedSong = PlaylistSongInfo.Items.FirstOrDefault(item => item.Track.Id == songIdGuess);
 
-			Console.WriteLine("Correct Song: " + CurrentSong.Href + ", " + CurrentSong.Name + " by: " + String.Join(" & ", CurrentSong.Artists.Select(x => x.Name)));
-			Console.WriteLine("Song Guessed: " + guessedSong.Href + ", " + guessedSong.Name + " by: " + String.Join(" & ", guessedSong.Artists.Select(x => x.Name)));
-
-			Console.WriteLine(guessedSong.Name == CurrentSong.Name);
-			Console.WriteLine(guessedSong.Artists.Select(x => x.Name).Except(CurrentSong.Artists.Select(x => x.Name)).ToList().Count);
-
-			if (guessedSong.Id == CurrentSong.Id || (guessedSong.Name == CurrentSong.Name && guessedSong.Artists.Select(x => x.Name).Except(CurrentSong.Artists.Select(x => x.Name)).ToList().Count == 0))
-			{
-				Console.WriteLine("Correct guessResponse");
+			if (guessedSong.Track.Id == CurrentSong.Id || guessedSong.Track.ExternalIds.Values.Any(id => id == CurrentSong.Id)) {
 				return new JsonResult(true);
 			}
 
-			Console.WriteLine("Incorrect Guess");
 			return new JsonResult(false);
 		}
 
@@ -124,9 +113,16 @@ namespace Heardle.Pages
 			var spotify = _spotifyClientBuilder.BuildClient().Result;
 			PlaylistSongInfo = JsonConvert.DeserializeObject<Paging<SavedTrack>>(HttpContext.Session.GetString("PlaylistSongInfo"));
 
+			var artists = new List<string>();
+			if (!string.IsNullOrWhiteSpace(artistName))
+			{
+				artists = artistName.Split(',').Select(p => p.Trim().ToUpper()).ToList();
+			}
+
 			var searchResult = PlaylistSongInfo.Items.Select(item => item.Track).Where(track =>
 			{
-				return (string.IsNullOrWhiteSpace(songName) || track.Name.ToUpper().Contains(songName.ToUpper())) && (string.IsNullOrWhiteSpace(artistName) || track.Artists.Select(x => x.Name).Any(artist => artist.ToUpper().Contains(artistName.ToUpper())));
+				return (string.IsNullOrWhiteSpace(songName) || track.Name.ToUpper().Contains(songName.ToUpper())) &&
+				(!artists.Any() || artists.All(artistName => track.Artists.Select(x => x.Name.ToUpper()).Any(artist => artist.Contains(artistName))));    
 				}).ToList();
 
 			return new JsonResult(searchResult);

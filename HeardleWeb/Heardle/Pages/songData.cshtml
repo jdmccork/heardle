@@ -6,15 +6,16 @@
 		{
 			<img width="300" height="300" src="@Model.CurrentSong.Album.Images[0].Url">
 		}
-
+		<br />
 		<button id="togglePlay">Toggle Play</button>
 
 	</div>
 
 	<form method="post" asp-page-handler="Guess" id="guessForm">
 		<div>
-			<input id="autoCompleteSong" class="autoCompleteField" type="text" name="guess" />
-			<input id="autoCompleteArtist" class="autoCompleteField" type="text" name="guess" />
+			<input id="autoCompleteSong" class="autoCompleteField" type="text" placeholder="Song name" />
+			<input id="autoCompleteArtist" class="autoCompleteField" type="text" placeholder="Artist name" />
+			<input hidden id="songIdGuess" name="songIdGuess" />
 			<input type="submit" value="Guess" />
 			<button onclick="increaseTime()">Skip</button>
 		</div>
@@ -83,7 +84,6 @@
 			data: { "songName": songGuess, "artistName": artistGuess },
 			type: "POST",
 			success: function (data) {
-				console.log(data);
 				showResults(data)
 			},
 			error: function (response) {
@@ -96,33 +96,39 @@
 		res = document.getElementById("autoComplete");
 		let table = document.createElement("table");
 
-		for (i = 0; i < data.length; i++) {
+		data.forEach(item => {
 			var row = document.createElement("tr");
 
 			// add image
 			var image = document.createElement("img");
-			image.src = data[i].album.images[data[i].album.images.length - 1].url
+			image.src = item.album.images[item.album.images.length - 1].url
 			row.appendChild(image);
 
 			// Add title
 			var trackName = document.createElement("td");
-			trackName.innerText = data[i].name
+			trackName.innerText = item.name
 			row.appendChild(trackName);
 
 			// Add artists
 			var artists = document.createElement("td");
-			artists.innerText = data[i].artists.map(artist => artist.name).join(' & ')
+			artists.innerText = item.artists.map(artist => artist.name).join(' & ')
 			row.appendChild(artists);
+
+			row.onclick = function() { selectSong(item) } 
 
 			table.appendChild(row);
 
-			//table += `<tr><td>\
-			//		<img src= + data[i].album.images[data[i].album.images.length - 1].url>
-			//		data[i].name + data[i].artists.map(artist => artist.name).join(' & ')
-			//	</td></tr>`;
-		}
+		})
+
 		res.replaceChildren(table);
 		return true;
+	}
+
+	function selectSong(item) {
+		console.log(item) 
+		$(songIdGuess)[0].value = item.id
+		$(autoCompleteSong)[0].value = item.name
+		$(autoCompleteArtist)[0].value = item.artists.map(artist => artist.name).join(', ')
 	}
 
 	$("#guessForm").submit(function (e) {
@@ -148,7 +154,6 @@
 					increaseTime()
 					guessMessage.textContent = `Incorrect Guess. Time provieded increased to: ${timeProvided}`
 				}
-				//alert(data); // show response from the php script.
 			}
 		});
 
