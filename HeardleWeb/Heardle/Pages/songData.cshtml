@@ -13,7 +13,8 @@
 
 	<form method="post" asp-page-handler="Guess" id="guessForm">
 		<div>
-			<input id="autoCompleteField" type="text" name="guess" />
+			<input id="autoCompleteSong" class="autoCompleteField" type="text" name="guess" />
+			<input id="autoCompleteArtist" class="autoCompleteField" type="text" name="guess" />
 			<input type="submit" value="Guess" />
 			<button onclick="increaseTime()">Skip</button>
 		</div>
@@ -68,21 +69,18 @@
 	var doneTypingInterval = 750;  //time in ms
 
 	//on keyup, start the countdown
-	$('#autoCompleteField').keyup(function () {
+	$('.autoCompleteField').keyup(function () {
 		clearTimeout(typingTimer);
-		if ($('#autoCompleteField').val()) {
-			typingTimer = setTimeout(autoCompleteSearch, doneTypingInterval);
-		}
+		typingTimer = setTimeout(autoCompleteSearch, doneTypingInterval);
 	});
 
-	function autoCompleteSearch(manual = false) {
-		let autoCompletetxt = $(autoCompleteField)[0].value
-		if (!manual && autoCompletetxt.length < 3) {
-			return
-		}
+	function autoCompleteSearch() {
+		let songGuess = $(autoCompleteSong)[0].value
+		let artistGuess = $(autoCompleteArtist)[0].value
+
 		$.ajax({
 			url: '/Game?handler=AutoComplete',
-			data: { "search": autoCompletetxt },
+			data: { "songName": songGuess, "artistName": artistGuess },
 			type: "POST",
 			success: function (data) {
 				console.log(data);

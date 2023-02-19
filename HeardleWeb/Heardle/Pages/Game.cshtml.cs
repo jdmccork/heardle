@@ -33,13 +33,24 @@ namespace Heardle.Pages
 
 		public async Task OnGet()
 		{
+			
+		}
+
+		private async Task GetUserSongs()
+		{
 			var spotify = await _spotifyClientBuilder.BuildClient();
 			var x = HttpContext.Session.GetString("PlaylistSongInfo");
+
 			if (x == null)
 			{
-				PlaylistSongInfo = await spotify.Library.GetTracks(new LibraryTracksRequest { Limit = 1, Offset = 0 });
+				PlaylistSongInfo = await spotify.Library.GetTracks(new LibraryTracksRequest { Limit = 50, Offset = 0 });
+				for (int i = 50; i < PlaylistSongInfo.Total; i += 50)
+				{
+					PlaylistSongInfo.Items.AddRange(spotify.Library.GetTracks(new LibraryTracksRequest { Limit = 50, Offset = i }).Result.Items);
+				}
 				HttpContext.Session.SetString("PlaylistSongInfo", JsonConvert.SerializeObject(PlaylistSongInfo));
-			} else
+			}
+			else
 			{
 				PlaylistSongInfo = JsonConvert.DeserializeObject<Paging<SavedTrack>>(x);
 			}
@@ -57,13 +68,14 @@ namespace Heardle.Pages
 
 		public async Task<PartialViewResult> OnGetNextSong()
 		{
+			await GetUserSongs();
+
 			var spotify = await _spotifyClientBuilder.BuildClient();
 			PlaylistSongInfo = JsonConvert.DeserializeObject<Paging<SavedTrack>>(HttpContext.Session.GetString("PlaylistSongInfo"));
 
 			var songIndex = new Random().Next((int)PlaylistSongInfo.Total);
-			var likedSongs = await spotify.Library.GetTracks(new LibraryTracksRequest { Limit = 1, Offset = songIndex });
 
-			CurrentSong = likedSongs.Items[0].Track;
+			CurrentSong = PlaylistSongInfo.Items[songIndex].Track;
 			Console.WriteLine(CurrentSong.Name);
 			HttpContext.Session.SetString("CurrentSong", JsonConvert.SerializeObject(CurrentSong));
 
@@ -106,26 +118,24 @@ namespace Heardle.Pages
 			return new JsonResult(false);
 		}
 
-		public IActionResult OnPostAutoComplete(string search)
+		public IActionResult OnPostAutoComplete(string songName, string artistName)
 		{
-			Console.WriteLine(search);
+			Console.WriteLine(songName);
 			var spotify = _spotifyClientBuilder.BuildClient().Result;
+			PlaylistSongInfo = JsonConvert.DeserializeObject<Paging<SavedTrack>>(HttpContext.Session.GetString("PlaylistSongInfo"));
 
-			var guess = new SearchRequest(SearchRequest.Types.Track, search) { Limit = 50 };
-			var searchResult = spotify.Search.Item(guess).Result.Tracks.Items;
+			var searchResult = PlaylistSongInfo.Items.Select(item => item.Track).Where(track =>
+			{
+				return (string.IsNullOrWhiteSpace(songName) || track.Name.ToUpper().Contains(songName.ToUpper())) && (string.IsNullOrWhiteSpace(artistName) || track.Artists.Select(x => x.Name).Any(artist => artist.ToUpper().Contains(artistName.ToUpper())));
+				}).ToList();
 
-			var test = new LibraryCheckTracksRequest(searchResult.Select(x => x.Id).ToList());
-			var tracksInPlaylist = spotify.Library.CheckTracks(test).Result;
-
-			var candidateSongs = searchResult.Where((track, index) => tracksInPlaylist[index] || (track.Name == CurrentSong.Name && track.Artists.Select(x => x.Name).Except(CurrentSong.Artists.Select(x => x.Name)).ToList().Count == 0));
-
-			return new JsonResult(candidateSongs);
+			return new JsonResult(searchResult);
 		}
 
 		public IActionResult OnPostConnectSDK(string deviceId)
 		{
 			HttpContext.Session.SetString("deviceId", deviceId);
-			return new JsonResult("Player Loaded. Getting Song.");
+			return new JsonResult("Player Loaded. Retrieving users liked songs...");
 		}
 
 		[NonAction]
