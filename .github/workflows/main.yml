@@ -20,7 +20,7 @@ jobs:
         run: dotnet publish ./HeardleWeb/Heardle/Heardle.csproj -c Release -o release --nologo
         
       - name: Commit wwwroot to GitHub Pages
-        uses: actions/deploy-pages@v1.2.4
+        uses: JamesIves/github-pages-deploy-action@3.7.1
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: gh-pages
