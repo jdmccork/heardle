@@ -15,7 +15,6 @@ namespace Heardle.Pages
 	{
 		private readonly SpotifyClientBuilder _spotifyClientBuilder;
 
-		[BindProperty]
 		public FullTrack CurrentSong { get; set; }
 		[BindProperty]
 		public string Message { get; set; } = "Loading Context...";
@@ -69,7 +68,6 @@ namespace Heardle.Pages
 		{
 			await GetUserSongs();
 
-			var spotify = await _spotifyClientBuilder.BuildClient();
 			PlaylistSongInfo = JsonConvert.DeserializeObject<Paging<SavedTrack>>(HttpContext.Session.GetString("PlaylistSongInfo"));
 
 			var songIndex = new Random().Next((int)PlaylistSongInfo.Total);
@@ -81,7 +79,7 @@ namespace Heardle.Pages
 			return PartialView("songData", this);
 		}
 
-		public async Task<IActionResult> OnPostPlayTrack(int timeout)
+		public async Task OnPostPlayTrack()
 		{
 			var spotify = await _spotifyClientBuilder.BuildClient();
 			var deviceId = (HttpContext.Session.GetString("deviceId"));
@@ -89,8 +87,6 @@ namespace Heardle.Pages
 
 			var playRequest = new PlayerResumePlaybackRequest() { Uris = new List<string>() { CurrentSong.Uri }, DeviceId = deviceId, PositionMs = 0 };
 			await spotify.Player.ResumePlayback(playRequest);
-
-			return new JsonResult("Playing track " + CurrentSong.Name);
 		}
 
 		public IActionResult OnPostGuess(string songIdGuess)
@@ -126,6 +122,14 @@ namespace Heardle.Pages
 				}).ToList();
 
 			return new JsonResult(searchResult);
+		}
+
+		public PartialViewResult OnPostEndGame()
+		{
+			CurrentSong = JsonConvert.DeserializeObject<FullTrack>(HttpContext.Session.GetString("CurrentSong"));
+
+			// Save game data to db
+			return PartialView("trackCard", this);
 		}
 
 		public IActionResult OnPostConnectSDK(string deviceId)

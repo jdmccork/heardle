@@ -1,0 +1,26 @@
+﻿@model GameModel
+
+<div class="modal-dialog" role="document">
+	<div class="modal-content">
+		<div class="modal-body">
+			<p>@Model.CurrentSong.Name</p>
+			@if (Model.CurrentSong.Album.Images.Any())
+			{
+				<img width="300" height="300" src="@Model.CurrentSong.Album.Images[0].Url">
+			}
+			<p>@string.Join("& ", Model.CurrentSong.Artists.Select(artist => artist.Name))</p>
+		</div>
+		<div class="modal-footer">
+			<button type="button" class="btn btn-primary" onclick="getNewSong()">Next Song</button>
+		</div>
+	</div>
+</div>
+
+<script type="text/javascript">
+	function getNewSong() {
+		$('#song-element').load('/Game?handler=NextSong')
+		$('body').removeClass('modal-open');
+		$('.modal-backdrop').remove();
+		return true;
+	}
+</script>

@@ -1,30 +1,46 @@
 ﻿@model GameModel
-<div game>
+@{var guesses = 6;}
 
-	<div id="song-element">
-		@if (Model.CurrentSong.Album.Images.Any())
-		{
-			<img width="300" height="300" src="@Model.CurrentSong.Album.Images[0].Url">
-		}
-		<br />
-		<button id="togglePlay">Toggle Play</button>
+<table class="table">
+	<thead>
+		<tr>
+			<th>Guess</th>
+			<th>Song</th>
+			<th>Artists</th>
+			<th>Time (Sec)</th>
+		</tr>
+	</thead>
+	@for (int i = 1; i <= guesses; i++)
+	{
+		<tr id="guess@(i)Row">
+			<td>Guess @i</td>
+			<td id="guess@(i)Song"></td>
+			<td id="guess@(i)Artist"></td>
+			<td>@(Math.Pow(2, i-1))</td>
+		</tr>
+	}
+</table>
+<button id="togglePlay" type="button" class="btn bg-dark rounded-circle">
+	<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" class="bi bi-play" viewBox="0 3 14 14">
+		<path d="M10.804 8 5 4.633v6.734L10.804 8zm.792-.696a.802.802 0 0 1 0 1.392l-6.363 3.692C4.713 12.69 4 12.345 4 11.692V4.308c0-.653.713-.998 1.233-.696l6.363 3.692z"></path>
+	</svg>
+</button>
 
+<form method="post" asp-page-handler="Guess" id="guessForm">
+	<div>
+		<input id="autoCompleteSong" class="autoCompleteField" type="text" placeholder="Song name" />
+		<input id="autoCompleteArtist" class="autoCompleteField" type="text" placeholder="Artist name" />
+		<input hidden id="songIdGuess" name="songIdGuess" />
+		<input type="submit" value="Guess" />
 	</div>
-
-	<form method="post" asp-page-handler="Guess" id="guessForm">
-		<div>
-			<input id="autoCompleteSong" class="autoCompleteField" type="text" placeholder="Song name" />
-			<input id="autoCompleteArtist" class="autoCompleteField" type="text" placeholder="Artist name" />
-			<input hidden id="songIdGuess" name="songIdGuess" />
-			<input type="submit" value="Guess" />
-			<button onclick="increaseTime()">Skip</button>
-		</div>
-		<div id="autoComplete" class="autoComplete"></div>
-	</form>
-</div>
+</form>
+<button onclick="skipGuess()">Skip</button>
+<div id="autoComplete" class="autoComplete"></div>
+<div id="trackModal" class="modal" tabindex="-1" role="dialog"></div>
 
 <script type="text/javascript">
 	var timeProvided = 1000
+	var guesses = @guesses
 	var pauseTimeout
 
 	player.addListener('player_state_changed', (state) => {
@@ -44,7 +60,6 @@
 	);
 
 	document.getElementById('togglePlay').onclick = function () {
-
 		player.getCurrentState().then(state => {
 			console.log(state)
 			if (state && !state.paused) {
@@ -54,9 +69,6 @@
 					url: '/Game?handler=PlayTrack',
 					data: { "timeout": timeProvided },
 					type: "POST",
-					success: function (data) {
-						console.log(data)
-					},
 					error: function (response) {
 						console.log(response);
 					}
@@ -78,18 +90,19 @@
 	function autoCompleteSearch() {
 		let songGuess = $(autoCompleteSong)[0].value
 		let artistGuess = $(autoCompleteArtist)[0].value
-
-		$.ajax({
-			url: '/Game?handler=AutoComplete',
-			data: { "songName": songGuess, "artistName": artistGuess },
-			type: "POST",
-			success: function (data) {
-				showResults(data)
-			},
-			error: function (response) {
-				console.log(response);
-			}
-		});
+		if (songGuess.length >= 3 || artistGuess.length >= 3) {
+			$.ajax({
+				url: '/Game?handler=AutoComplete',
+				data: { "songName": songGuess, "artistName": artistGuess },
+				type: "POST",
+				success: function (data) {
+					showResults(data)
+				},
+				error: function (response) {
+					console.log(response);
+				}
+			});
+		}
 	}
 
 	function showResults(data) {
@@ -146,27 +159,44 @@
 				let guessMessage = document.getElementById("guessMessage")
 				if (data) {
 					console.log("correct song")
-					getNewSong()
-					timeProvided = 1000
+					endGame(true)
 					guessMessage.textContent = "Correct Guess"
 				} else {
+					var x = "guess" + (Math.log2(timeProvided/1000) + 1)
+					document.getElementById(x + "Song").textContent = document.getElementById('autoCompleteSong').value
+					document.getElementById(x + "Artist").textContent = document.getElementById('autoCompleteArtist').value
 					console.log("Incorrect guess")
 					increaseTime()
 					guessMessage.textContent = `Incorrect Guess. Time provieded increased to: ${timeProvided}`
 				}
 			}
 		});
-
-
 	});
 
-	function getNewSong() {
-		$('#song-element').load('/Game?handler=NextSong')
-		return true;
+	function skipGuess() {
+		var x = "guess" + (Math.log2(timeProvided / 1000) + 1)
+		document.getElementById(x + "Song").textContent = "Skipped"
+		document.getElementById(x + "Artist").textContent = "Skipped"
+		increaseTime()
+		guessMessage.textContent = `Time provieded increased to: ${timeProvided}`
 	}
 
 	function increaseTime() {
 		timeProvided = timeProvided * 2
-		guessMessage.textContent = `Time provieded increased to: ${timeProvided}`
+		if ((Math.log2(timeProvided / 1000) + 1) > guesses) {
+			endGame(false)
+		}
+	}
+
+	function endGame(correctGuess) {
+		timeProvided = 1000
+
+		$('#trackModal').load(
+			'/Game?handler=EndGame', 
+			{ "correctGuess": correctGuess, "attempts": (Math.log2(timeProvided / 1000) + 1) },
+			function() {
+				$('#trackModal').modal('show')
+			}
+		)
 	}
 </script>
